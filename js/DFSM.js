@@ -1,13 +1,28 @@
 class DFSM {
+    /** A finite set of states. */
+    Q;
+    /** A finite set of input symbols called the alphabet. */
+    Σ;
+    /** A total function that computes the transitions between states δ : Q x Σ → Q represented by a table. */
+    δ;
+    /** An initial state q₀ ∈ Q. */
+    q0;
+    /** A finite set of accept states F ⊆ Q. */
+    F;
+    /** Array of all the sink nodes. */
+    sink_nodes;
+    /** Automata description. */
+    description;
     /**
      * Constructs the specified deterministic finite-state machine.
      * @param {string[]} Q A finite set of states.
      * @param {string} Σ A finite set of input symbols called the alphabet.
-     * @param δ A total function that computes the transitions between states δ : Q x Σ → Q represented by a table.
+     * @param {object} δ A total function that computes the transitions between states δ : Q x Σ → Q represented by a table.
      * @param {string} q0 An initial state q₀ ∈ Q.
      * @param {string[]} F A finite set of accept states F ⊆ Q.
+     * @param {string} [description=""] Optional parameter, that simply helps to distinguish multiple automata.
      */
-    constructor(Q, Σ, δ, q0, F) {
+    constructor(Q, Σ, δ, q0, F, description = "") {
         this.Q = Array.from(new Set(Q));
         if (this.Q.length !== Q.length)
             console.warn("Removed duplicates from Q!");
@@ -22,11 +37,14 @@ class DFSM {
         if (this.F.length !== F.length)
             console.warn("Removed duplicates from F!");
         this.sink_nodes = [];
-        state_loop: for (let i = 0; i < this.Q.length; i++) {
+        this.description = description;
+        // check for the completeness of δ while finding the sink_nodes.
+        for (let i = 0; i < this.Q.length; i++) {
             let state = this.Q[i];
             let transitions = this.δ[state];
             if (typeof transitions === "undefined")
                 throw `δ[${state}] is missing from the FSM transition table!`;
+            let is_sink_node = true;
             for (let j = 0; j < this.Σ.length; j++) {
                 let input_symbol = this.Σ[j], next_state = transitions[input_symbol];
                 if (typeof next_state === "undefined")
@@ -34,9 +52,10 @@ class DFSM {
                 else if (!this.Q.includes(next_state))
                     throw `δ[${state}][${input_symbol}] = ${next_state} is an invalid transition, because ${next_state} is a state that doesn't belong to the FSM!`;
                 else if (next_state !== state)
-                    continue state_loop; // if there is one transition from the current state to another one => it's not a sink node
+                    is_sink_node = false; // if there is one transition from the current state to another one => it's not a sink node
             }
-            this.sink_nodes.push(state);
+            if (is_sink_node)
+                this.sink_nodes.push(state);
         }
     }
     /** If a given character belongs to the FSM alphabet, typecast it to Σ; throw an error otherwise. */
@@ -68,10 +87,25 @@ class DFSM {
 /////////////////////////////////////////////////
 // TESTS
 /////////////////////////////////////////////////
-// linguaggio che contiene un numero pari di 0 e un numero dispari di 1
+// Accepts only strings that have an even number of zeroes and an odd number of ones.
 const A000 = new DFSM(["q0", "q1", "q2", "q3"], ["0", "1"], {
     q0: { 0: "q1", 1: "q2" },
     q1: { 0: "q0", 1: "q3" },
     q2: { 0: "q3", 1: "q0" },
     q3: { 0: "q2", 1: "q1" }
-}, "q0", ["q2"]);
+}, "q0", ["q2"], "(001+010+100+00+111)(001+010+100+00+111)*+1");
+// Accepts only strings that either are empty or are formed by any pattern of alternating zeroes and ones. (ex. 0, 01, 010, 0101, ...)
+const A001 = new DFSM(["q0", "q1", "e"], ["0", "1"], {
+    q0: {
+        0: "q1",
+        1: "e"
+    },
+    q1: {
+        0: "e",
+        1: "q0"
+    },
+    e: {
+        0: "e",
+        1: "e"
+    }
+}, "q0", ["q0", "q1"], "0+(01)*(0+Ɛ)");
