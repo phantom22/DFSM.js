@@ -31,7 +31,7 @@ class DFSM {
             console.warn("Removed duplicates from Σ!");
         this.δ = δ;
         if (!this.Q.includes(q0))
-            throw `${q0} is an invalid initial state because it doesn't belong to the FSM!`;
+            throw `"${q0}" is an invalid initial state because it doesn't belong to the FSM!`;
         this.q0 = q0;
         this.F = Array.from(new Set(F));
         if (this.F.length !== F.length)
@@ -43,14 +43,14 @@ class DFSM {
             let state = this.Q[i];
             let transitions = this.δ[state];
             if (typeof transitions === "undefined")
-                throw `δ[${state}] is missing from the FSM transition table!`;
+                throw `δ is incomplete: δ["${state}"] is missing from the FSM transition table!`;
             let is_sink_node = true;
             for (let j = 0; j < this.Σ.length; j++) {
                 let input_symbol = this.Σ[j], next_state = transitions[input_symbol];
                 if (typeof next_state === "undefined")
-                    throw `δ[${state}][${input_symbol}] is missing from the FSM transition table!`;
+                    throw `δ is incomplete: δ["${state}"]["${input_symbol}"] is missing from the FSM transition table!`;
                 else if (!this.Q.includes(next_state))
-                    throw `δ[${state}][${input_symbol}] = ${next_state} is an invalid transition, because ${next_state} is a state that doesn't belong to the FSM!`;
+                    throw `δ is ambiguous: δ["${state}"]["${input_symbol}"] points to an invalid state, because "${next_state}" doesn't belong to the FSM!`;
                 else if (next_state !== state)
                     is_sink_node = false; // if there is one transition from the current state to another one => it's not a sink node
             }
@@ -58,54 +58,40 @@ class DFSM {
                 this.sink_nodes.push(state);
         }
     }
-    /** If a given character belongs to the FSM alphabet, typecast it to Σ; throw an error otherwise. */
-    #belongsToΣ(char) {
+    /** If a given symbol belongs to the FSM alphabet, typecast it to Σ; throw an error otherwise. */
+    validate_char(char) {
         for (let i = 0; i < this.Σ.length; i++)
             if (this.Σ[i] === char)
                 return;
-        throw `The character ${char} is not part of the alphabet!`;
+        throw `The symbol ${char} is not part of the alphabet!`;
     }
-    /** If a given string is composed of characters that belong to the FSM alphabet, convert it to Σ[]; throw an error otherwise. */
-    stringBelongsToΣ(string) {
+    /** If a given string is composed of symbols that belong to the FSM alphabet, convert it to Σ[]; throw an error otherwise. */
+    validate_input(string) {
         let o = [];
         for (let i = 0; i < string.length; i++) {
             let y = string[i];
-            this.#belongsToΣ(y);
+            this.validate_char(y);
             o.push(y);
         }
         return o;
     }
-    /** Given an input string, compute its output state. */
-    compute(string) {
-        let parsed = this.stringBelongsToΣ(string);
+    /** Given an input string, compute its output state; will throw an error if the input string contains symbols that do not belong to Σ. */
+    read(input) {
+        let parsed = this.validate_input(input);
         let currentState = this.q0;
         for (let i = 0; i < parsed.length && !this.sink_nodes.includes(currentState); i++)
             currentState = this.δ[currentState][parsed[i]];
-        return { final_state: currentState, is_accept_state: this.F.includes(currentState) };
+        return currentState;
+    }
+    /** Returns true if a given input belongs to the language represented by the automata. */
+    test(input) {
+        let finalState;
+        try {
+            finalState = this.read(input);
+        }
+        catch (e) {
+            return false;
+        }
+        return this.F.includes(finalState);
     }
 }
-/////////////////////////////////////////////////
-// TESTS
-/////////////////////////////////////////////////
-// Accepts only strings that have an even number of zeroes and an odd number of ones.
-const A000 = new DFSM(["q0", "q1", "q2", "q3"], ["0", "1"], {
-    q0: { 0: "q1", 1: "q2" },
-    q1: { 0: "q0", 1: "q3" },
-    q2: { 0: "q3", 1: "q0" },
-    q3: { 0: "q2", 1: "q1" }
-}, "q0", ["q2"], "(001+010+100+00+111)(001+010+100+00+111)*+1");
-// Accepts only strings that either are empty or are formed by any pattern of alternating zeroes and ones. (ex. 0, 01, 010, 0101, ...)
-const A001 = new DFSM(["q0", "q1", "e"], ["0", "1"], {
-    q0: {
-        0: "q1",
-        1: "e"
-    },
-    q1: {
-        0: "e",
-        1: "q0"
-    },
-    e: {
-        0: "e",
-        1: "e"
-    }
-}, "q0", ["q0", "q1"], "0+(01)*(0+Ɛ)");
