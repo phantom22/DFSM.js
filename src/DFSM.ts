@@ -1,7 +1,7 @@
 /** 
  * this type constructs an exhaustive structure that enables this behaviour:
  * 
- * let OBJ ∈ delta. OBJ[q][a] ∈ Q, ∀ q ∈ Q, ∀ a ∈ Σ.
+ * let OBJ ∈ δ<Q,Σ>. OBJ[q][a] ∈ Q, ∀ q ∈ Q, ∀ a ∈ Σ.
  * 
  * Basically this represents the complete function δ : Q x Σ → Q as a table.
  */
