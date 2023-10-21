@@ -11,34 +11,34 @@ class DFSM {
     F;
     /** Array of all the sink nodes. */
     sink_nodes;
-    /** Automata description. */
-    description;
+    /** Automatas label. */
+    label;
     /**
      * Constructs the specified deterministic finite-state machine.
      * @param {string[]} Q A finite set of states.
      * @param {string} Σ A finite set of input symbols called the alphabet.
-     * @param {object} δ A total function that computes the transitions between states δ : Q x Σ → Q represented by a table.
+     * @param {object} δ A total function that computes the transitions between states δ : Q x Σ → Q represented by a table in its full form; each entry can be also represented with a short-hand form which looks like this: [incomplete_δ: contains part of the transitions, default_transition_state: all the missing transitions from incomplete_δ will point to this default state].
      * @param {string} q0 An initial state q₀ ∈ Q.
      * @param {string[]} F A finite set of accept states F ⊆ Q.
-     * @param {string} [description=""] Optional parameter, that simply helps to distinguish multiple automata.
+     * @param {string} [label=""] Optional parameter, that simply helps to distinguish multiple automata.
      */
-    constructor(Q, Σ, δ, q0, F, description = "") {
+    constructor(Q, Σ, δ, q0, F, label = "") {
         this.Q = Array.from(new Set(Q));
-        if (this.Q.length !== Q.length)
-            console.warn("Removed duplicates from Q!");
         this.Σ = Array.from(new Set(Σ));
-        if (this.Σ.length !== Σ.length)
-            console.warn("Removed duplicates from Σ!");
+        this.complete_δ(δ);
         this.δ = δ;
-        if (!this.Q.includes(q0))
-            throw `"${q0}" is an invalid initial state because it doesn't belong to the FSM!`;
+        this.validate_state(q0);
         this.q0 = q0;
-        this.F = Array.from(new Set(F));
-        if (this.F.length !== F.length)
-            console.warn("Removed duplicates from F!");
+        this.F = Array.from(new Set(F)).map(v => {
+            this.validate_state(v);
+            return v;
+        });
         this.sink_nodes = [];
-        this.description = description;
-        // check for the completeness of δ while finding the sink_nodes.
+        this.label = label;
+        this.#δ_final_check();
+    }
+    /** check for the completeness of δ while finding the sink_nodes. */
+    #δ_final_check() {
         for (let i = 0; i < this.Q.length; i++) {
             let state = this.Q[i];
             let transitions = this.δ[state];
@@ -63,17 +63,55 @@ class DFSM {
         for (let i = 0; i < this.Σ.length; i++)
             if (this.Σ[i] === char)
                 return;
-        throw `The symbol ${char} is not part of the alphabet!`;
+        throw `The symbol ${char} is not part of the Σ!`;
+    }
+    /** If a given state belongs to the FSM, typecast it to Q; throw an error otherwise. */
+    validate_state(state) {
+        for (let i = 0; i < this.Q.length; i++)
+            if (this.Q[i] === state)
+                return;
+        throw `The state "${state}" is not part of the Q!`;
     }
     /** If a given string is composed of symbols that belong to the FSM alphabet, convert it to Σ[]; throw an error otherwise. */
     validate_input(string) {
-        let o = [];
-        for (let i = 0; i < string.length; i++) {
-            let y = string[i];
-            this.validate_char(y);
-            o.push(y);
+        return string.split("").map(v => {
+            this.validate_char(v);
+            return v;
+        });
+    }
+    /** Converts a short-hand transition table to a complete one. */
+    complete_state_transitions(state_transitions, default_transition_state) {
+        this.validate_state(default_transition_state);
+        let provided_inputs = Object.keys(state_transitions).map(v => {
+            this.validate_char(v);
+            this.validate_state(state_transitions[v]);
+            return v;
+        });
+        for (let i = 0; i < this.Σ.length; i++) {
+            let a = this.Σ[i];
+            if (provided_inputs.includes(a))
+                continue;
+            state_transitions[a] = default_transition_state;
         }
-        return o;
+    }
+    /** Converts all the short-hand transitions to their complete version. */
+    complete_δ(δ) {
+        let provided_states = Object.keys(δ).map(v => {
+            this.validate_state(v);
+            return v;
+        });
+        for (let i = 0; i < provided_states.length; i++) {
+            let q = provided_states[i];
+            let t = δ[q];
+            if (typeof t !== "object")
+                throw `δ[${q}] points to an invalid entry!`;
+            if (Array.isArray(t) && t.length === 2) {
+                let transitions = t[0];
+                let default_transition_state = t[1];
+                this.complete_state_transitions(transitions, default_transition_state);
+                δ[q] = transitions;
+            }
+        }
     }
     /** Given an input string, compute its output state; will throw an error if the input string contains symbols that do not belong to Σ. */
     read(input) {
