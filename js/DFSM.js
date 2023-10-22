@@ -5,7 +5,7 @@ class DFSM {
     Σ;
     /** A total function that computes the transitions between states δ : Q x Σ → Q represented by a table. */
     δ;
-    /** An initial state q₀ ∈ Q. */
+    /** An initial state q0 ∈ Q. */
     q0;
     /** A finite set of accept states F ⊆ Q. */
     F;
@@ -47,7 +47,9 @@ class DFSM {
         for (let i = 0; i < this.Q.length; i++)
             if (this.Q[i] === state)
                 return;
-        throw typeof origin === "string" && origin !== "" ? `${origin} points to "${state}" which is not part of the Q! ` : `The state "${state}" is not part of the Q!`;
+        throw typeof origin === "string" && origin !== "" ?
+            `${origin} points to "${state}" which is not part of the Q! ` :
+            `The state "${state}" is not part of the Q!`;
     }
     /** If a given string is composed of symbols that belong to the FSM alphabet, convert it to Σ[]; throw an error otherwise. */
     validate_input(string) {
@@ -80,6 +82,7 @@ class DFSM {
             else if (typeof t !== "object")
                 throw `δ is incomplete: δ["${q}"] points to an invalid data type [expected:object, got:${typeof t}]`;
             let sink_node = true;
+            // if short-hand transitions
             if (Array.isArray(t) && t.length === 2) {
                 let transitions = t[0], transition_states = Object.keys(transitions).map(v => transitions[v]), default_transition_state = t[1];
                 for (let j = 0; j < transition_states.length; j++)
@@ -88,6 +91,7 @@ class DFSM {
                 this.complete_state_transitions(transitions, default_transition_state);
                 δ[q] = transitions;
             }
+            // if transitions in full
             else {
                 for (let j = 0; j < this.Σ.length; j++) {
                     let a = this.Σ[j], next_q = t[a];
