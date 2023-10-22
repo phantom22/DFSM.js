@@ -10,7 +10,7 @@ class DFSM {
     /** A finite set of accept states F ⊆ Q. */
     F;
     /** Array of all the sink nodes. */
-    sink_nodes;
+    sink_nodes = [];
     /** Automatas label. */
     label;
     /**
@@ -25,7 +25,7 @@ class DFSM {
     constructor(Q, Σ, δ, q0, F, label = "") {
         this.Q = Array.from(new Set(Q));
         this.Σ = Array.from(new Set(Σ));
-        this.complete_δ(δ);
+        this.#complete_δ(δ);
         this.δ = δ;
         this.validate_state(q0);
         this.q0 = q0;
@@ -33,30 +33,7 @@ class DFSM {
             this.validate_state(v);
             return v;
         });
-        this.sink_nodes = [];
         this.label = label;
-        this.#δ_final_check();
-    }
-    /** check for the completeness of δ while finding the sink_nodes. */
-    #δ_final_check() {
-        for (let i = 0; i < this.Q.length; i++) {
-            let state = this.Q[i];
-            let transitions = this.δ[state];
-            if (typeof transitions === "undefined")
-                throw `δ is incomplete: δ["${state}"] is missing from the FSM transition table!`;
-            let is_sink_node = true;
-            for (let j = 0; j < this.Σ.length; j++) {
-                let input_symbol = this.Σ[j], next_state = transitions[input_symbol];
-                if (typeof next_state === "undefined")
-                    throw `δ is incomplete: δ["${state}"]["${input_symbol}"] is missing from the FSM transition table!`;
-                else if (!this.Q.includes(next_state))
-                    throw `δ is ambiguous: δ["${state}"]["${input_symbol}"] points to an invalid state, because "${next_state}" doesn't belong to the FSM!`;
-                else if (next_state !== state)
-                    is_sink_node = false; // if there is one transition from the current state to another one => it's not a sink node
-            }
-            if (is_sink_node)
-                this.sink_nodes.push(state);
-        }
     }
     /** If a given symbol belongs to the FSM alphabet, typecast it to Σ; throw an error otherwise. */
     validate_char(char) {
@@ -66,11 +43,11 @@ class DFSM {
         throw `The symbol ${char} is not part of the Σ!`;
     }
     /** If a given state belongs to the FSM, typecast it to Q; throw an error otherwise. */
-    validate_state(state) {
+    validate_state(state, origin = "") {
         for (let i = 0; i < this.Q.length; i++)
             if (this.Q[i] === state)
                 return;
-        throw `The state "${state}" is not part of the Q!`;
+        throw typeof origin === "string" && origin !== "" ? `${origin} points to "${state}" which is not part of the Q! ` : `The state "${state}" is not part of the Q!`;
     }
     /** If a given string is composed of symbols that belong to the FSM alphabet, convert it to Σ[]; throw an error otherwise. */
     validate_input(string) {
@@ -94,23 +71,38 @@ class DFSM {
             state_transitions[a] = default_transition_state;
         }
     }
-    /** Converts all the short-hand transitions to their complete version. */
-    complete_δ(δ) {
-        let provided_states = Object.keys(δ).map(v => {
-            this.validate_state(v);
-            return v;
-        });
-        for (let i = 0; i < provided_states.length; i++) {
-            let q = provided_states[i];
-            let t = δ[q];
-            if (typeof t !== "object")
-                throw `δ[${q}] points to an invalid entry!`;
+    /** Converts all the short-hand transitions to their complete version while checking the completeness of δ. */
+    #complete_δ(δ) {
+        for (let i = 0; i < this.Q.length; i++) {
+            let q = this.Q[i], t = δ[q];
+            if (typeof t === "undefined")
+                throw `δ is incomplete: δ["${q}"] is missing from the FSM transition table!`;
+            else if (typeof t !== "object")
+                throw `δ is incomplete: δ["${q}"] points to an invalid data type [expected:object, got:${typeof t}]`;
+            let sink_node = true;
             if (Array.isArray(t) && t.length === 2) {
-                let transitions = t[0];
-                let default_transition_state = t[1];
+                let transitions = t[0], transition_states = Object.keys(transitions).map(v => transitions[v]), default_transition_state = t[1];
+                for (let j = 0; j < transition_states.length; j++)
+                    if (transition_states[j] !== default_transition_state)
+                        sink_node = false;
                 this.complete_state_transitions(transitions, default_transition_state);
                 δ[q] = transitions;
             }
+            else {
+                for (let j = 0; j < this.Σ.length; j++) {
+                    let a = this.Σ[j], next_q = t[a];
+                    if (typeof next_q === "undefined")
+                        throw `δ is incomplete: δ["${q}"]["${a}"] is missing from the FSM transition table!`;
+                    else if (typeof next_q !== "string")
+                        throw `δ is incomplete: δ["${q}"]["${a}"] points to an invalid data type [expected:string, got:${typeof next_q}]`;
+                    else
+                        this.validate_state(next_q, `δ is incomplete: δ["${q}"]["${a}"]`);
+                    if (next_q !== q)
+                        sink_node = false; // if there is one transition from the current state to another one => it's not a sink node
+                }
+            }
+            if (sink_node)
+                this.sink_nodes.push(q);
         }
     }
     /** Given an input string, compute its output state; will throw an error if the input string contains symbols that do not belong to Σ. */
