@@ -45,37 +45,48 @@ class DFSM<Q extends string, Σ extends string> {
      * @param {string} [label=""] Optional parameter, that simply helps to distinguish multiple automata.
      */
     constructor(Q:Q[],Σ:Σ[],δ:incomplete_δ<Q,Σ>,q0:Q,F:Q[],label="") {
+        let errors = [] as string[];
+
         this.Q = Array.from(new Set(Q));
         this.Σ = Array.from(new Set(Σ));
 
-        this.#complete_δ(δ);
+        this.#complete_δ(δ, errors);
         this.δ = δ;
 
-        this.validate_state(q0)
+        this.validate_state(q0, "q0 is an invalid state:", errors)
         this.q0 = q0;
 
         this.F = Array.from(new Set(F)).map(v => {
-            this.validate_state(v);
+            this.validate_state(v, "F contains invalid states:", errors);
             return v
         });
 
         this.label = label;
+
+        if (errors.length > 0)
+            throw "\n"+errors.join("\n")
     }
 
     /** If a given symbol belongs to the FSM alphabet, typecast it to Σ; throw an error otherwise. */
-    validate_char(char:string): asserts char is Σ {
+    validate_char(char:string, errors=[] as string[]): asserts char is Σ {
         for (let i=0; i<this.Σ.length; i++)
             if (this.Σ[i] === char) return;
-        throw `The symbol ${char} is not part of the Σ!`;
+
+        let err = `The symbol ${char} is not part of the Σ!`;
+        if (typeof errors==="object"&&Array.isArray(errors)) 
+            errors.push(err);
+        else throw err;
     }
 
     /** If a given state belongs to the FSM, typecast it to Q; throw an error otherwise. */
-    validate_state(state:string, origin=""): asserts state is Q {
+    validate_state(state:string, origin="", errors=[] as string[]): asserts state is Q {
         for (let i=0; i<this.Q.length; i++)
             if (this.Q[i] === state) return;
-        throw typeof origin==="string"&&origin!=="" ? 
-                    `${origin} points to "${state}" which is not part of the Q! ` : 
-                    `The state "${state}" is not part of the Q!`;
+        
+        let err = `${typeof origin==="string"?origin+" ":""}The state "${state}" is not part of the Q!`;
+        if (typeof errors==="object"&&Array.isArray(errors))
+            errors.push(err)
+        else throw err;
     }
     /** If a given string is composed of symbols that belong to the FSM alphabet, convert it to Σ[]; throw an error otherwise. */
     validate_input(string:string): Σ[] {
@@ -102,17 +113,22 @@ class DFSM<Q extends string, Σ extends string> {
         }
     }
     /** Converts all the short-hand transitions to their complete version while checking the completeness of δ. */
-    #complete_δ(δ:incomplete_δ<Q,Σ>): asserts δ is δ<Q,Σ> {
+    #complete_δ(δ:incomplete_δ<Q,Σ>, errors:string[]): asserts δ is δ<Q,Σ> {
+
+        if (typeof δ!=="object") {
+            errors.push(`δ is invalid: [expected:object, got:${typeof δ}]`);
+            return;
+        }
 
         for (let i=0; i<this.Q.length; i++) {
 
             let q = this.Q[i],
                 t = δ[q];
 
-            if (typeof t==="undefined") 
-                throw `δ is incomplete: δ["${q}"] is missing from the FSM transition table!`;
-            else if (typeof t!=="object") 
-                throw `δ is incomplete: δ["${q}"] points to an invalid data type [expected:object, got:${typeof t}]`;
+            if (typeof t!=="object") {
+                errors.push(`δ is incomplete: δ["${q}"] points to an invalid data type [expected:object, got:${typeof t}]`);
+                continue;
+            }
 
             let sink_node = true;
 
@@ -137,14 +153,17 @@ class DFSM<Q extends string, Σ extends string> {
                     let a = this.Σ[j], 
                         next_q = t[a as string];
 
-                    if (typeof next_q==="undefined") 
-                        throw `δ is incomplete: δ["${q}"]["${a}"] is missing from the FSM transition table!`;
-                    else if (typeof next_q!=="string") 
-                        throw `δ is incomplete: δ["${q}"]["${a}"] points to an invalid data type [expected:string, got:${typeof next_q}]`;
-                    else this.validate_state(next_q,`δ is incomplete: δ["${q}"]["${a}"]`);
+                    if (typeof next_q!=="string") 
+                        errors.push(`δ is incomplete: δ["${q}"]["${a}"] points to an invalid data type [expected:string, got:${typeof next_q}]`);
+                    else this.validate_state(next_q,`δ is incomplete: δ["${q}"]["${a}"]`,errors);
 
                     if (next_q !== q) sink_node = false; // if there is one transition from the current state to another one => it's not a sink node
                 }
+
+                let provided_inputs = Object.keys(t) as Σ[];
+                for (let j=0; j<provided_inputs.length; j++)
+                    if (!this.Σ.includes(provided_inputs[j]))
+                        errors.push(`δ contains invalid transitions: δ["${q}"]["${provided_inputs[j]}"] is invalid because ${provided_inputs["j"]} is not part of the Σ!`)
 
             }
 
